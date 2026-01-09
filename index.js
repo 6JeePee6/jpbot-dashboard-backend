@@ -1,36 +1,38 @@
 import express from "express";
+import cors from "cors";
 
 const app = express();
-app.use(express.json());
+const port = process.env.PORT || 3000;
 
-// In-memory opslag (voor nu)
-let latestState = null;
+app.use(cors());             // Sta CORS toe
+app.use(express.json());      // JSON body parsing
 
-// Health check (Render wil dit)
-app.get("/", (_, res) => {
-  res.send("JPBot Dashboard API is running");
+// In-memory opslag van coin-data
+let coinsData = [];
+
+// Healthcheck
+app.get("/", (req, res) => {
+    res.send("JPBot Dashboard API is running");
 });
 
-// iOS → Render
-app.post("/state", (req, res) => {
-  latestState = {
-    ...req.body,
-    receivedAt: new Date().toISOString()
-  };
-
-  console.log("📥 State ontvangen:", latestState);
-  res.json({ status: "ok" });
+// Frontend haalt coins op
+app.get("/api/coins", (req, res) => {
+    res.json(coinsData);
 });
 
-// Dashboard → Render
-app.get("/state", (_, res) => {
-  if (!latestState) {
-    return res.status(404).json({ error: "No data yet" });
-  }
-  res.json(latestState);
+// JPBot stuurt nieuwe data
+app.post("/api/coins", (req, res) => {
+    const newData = req.body;
+    if (!Array.isArray(newData)) {
+        return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
+    }
+
+    // Update de in-memory data
+    coinsData = newData;
+    console.log("✅ Data ontvangen van app:", coinsData);
+    res.json({ status: "ok", message: "Data ontvangen!" });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("🚀 Server gestart op poort", PORT);
+app.listen(port, () => {
+    console.log(`JPBot Dashboard API is running on port ${port}`);
 });
