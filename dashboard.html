@@ -1,156 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JPBot Dashboard</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JPBot Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-white font-sans min-h-screen">
 
-    <header class="bg-gray-800 p-4 text-center">
-        <h1 class="text-3xl font-bold text-yellow-400">JPBot Dashboard</h1>
-        <p class="text-gray-300 mt-1">Realtime crypto portfolio & prices</p>
-    </header>
+<header class="bg-gray-800 p-4 text-center sticky top-0 z-50">
+    <h1 class="text-3xl font-bold text-yellow-400">JPBot Dashboard</h1>
+    <p class="text-gray-300 mt-1">Realtime crypto portfolio & active trades</p>
+</header>
 
-    <main class="p-4 max-w-7xl mx-auto">
+<main class="p-4 max-w-7xl mx-auto space-y-8">
 
-        <!-- Portfolio overview -->
-        <section class="mb-8">
-            <div class="bg-gray-800 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold text-gray-300">Portfolio Value</h2>
-                    <p class="text-4xl font-bold text-green-400" id="portfolioValue">€0.00</p>
-                </div>
-                <div class="w-full md:w-1/2 mt-4 md:mt-0">
-                    <canvas id="portfolioChart" height="80"></canvas>
-                </div>
+    <!-- Portfolio overview -->
+    <section>
+        <div class="bg-gray-800 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-300">Portfolio Value</h2>
+                <p class="text-4xl font-bold text-green-400" id="portfolioValue">€0.00</p>
             </div>
-        </section>
-
-        <!-- Coins grid -->
-        <section>
-            <h2 class="text-xl font-semibold text-gray-300 mb-4">Coins</h2>
-            <div id="coinsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <!-- Coin cards injected here -->
+            <div class="w-full md:w-1/2 mt-4 md:mt-0">
+                <canvas id="portfolioChart" height="80"></canvas>
             </div>
-        </section>
-    </main>
+        </div>
+    </section>
 
-    <footer class="bg-gray-800 p-4 text-center text-gray-400 mt-8">
-        JPBot Dashboard &copy; 2026
-    </footer>
+    <!-- Coins grid -->
+    <section>
+        <h2 class="text-xl font-semibold text-gray-300 mb-4">Coins</h2>
+        <div id="coinsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- Coin cards injected dynamically -->
+        </div>
+    </section>
 
-    <script>
-        const apiUrl = "/api/coins";
+    <!-- Active Trades -->
+    <section>
+        <h2 class="text-xl font-semibold text-gray-300 mb-4">Active Trades</h2>
+        <div id="tradesGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- Active trades injected dynamically -->
+        </div>
+    </section>
 
-        const portfolioData = [];
+</main>
 
-        async function fetchCoins() {
-            try {
-                const res = await fetch(apiUrl);
-                const data = await res.json();
+<footer class="bg-gray-800 p-4 text-center text-gray-400 mt-8">
+    JPBot Dashboard &copy; 2026
+</footer>
 
-                updatePortfolio(data);
-                renderCoins(data);
-            } catch (error) {
-                console.error("Error fetching coins:", error);
-            }
-        }
+<script>
+const apiUrl = "/api/coins";
+const tradesUrl = "/api/trades"; // Endpoint voor actieve trades
+const portfolioData = [];
+const coinHistory = {}; // Houd prijs historie per coin
+const coinCharts = {};  // Chart.js instances per coin
 
-        function updatePortfolio(coins) {
-            const eurBalance = coins.reduce((sum, c) => sum + (c.balance * c.currentPrice), 0);
-            document.getElementById("portfolioValue").textContent = `€${eurBalance.toFixed(2)}`;
+let portfolioChartInstance;
 
-            // Keep last 30 values for chart
-            portfolioData.push(eurBalance);
-            if (portfolioData.length > 30) portfolioData.shift();
+// Fetch coins & trades
+async function fetchData() {
+    try {
+        const coinsRes = await fetch(apiUrl);
+        const coins = await coinsRes.json();
+        updatePortfolio(coins);
+        renderCoins(coins);
 
-            renderPortfolioChart();
-        }
+        const tradesRes = await fetch(tradesUrl);
+        const trades = await tradesRes.json();
+        renderTrades(trades);
 
-        function renderPortfolioChart() {
-            const ctx = document.getElementById('portfolioChart').getContext('2d');
-            if (window.portfolioChartInstance) {
-                window.portfolioChartInstance.data.labels = portfolioData.map((_, i) => i);
-                window.portfolioChartInstance.data.datasets[0].data = portfolioData;
-                window.portfolioChartInstance.update();
-                return;
-            }
+    } catch (error) {
+        console.error("Error fetching data:", error);
+    }
+}
 
-            window.portfolioChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: portfolioData.map((_, i) => i),
-                    datasets: [{
-                        label: 'Portfolio €',
-                        data: portfolioData,
-                        borderColor: '#FACC15',
-                        backgroundColor: 'rgba(250, 204, 21, 0.2)',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { display: false },
-                        y: { beginAtZero: true }
-                    }
-                }
+// Portfolio chart update
+function updatePortfolio(coins) {
+    const eurBalance = coins.reduce((sum, c) => sum + (c.balance * c.currentPrice), 0);
+    document.getElementById("portfolioValue").textContent = `€${eurBalance.toFixed(2)}`;
+
+    portfolioData.push(eurBalance);
+    if (portfolioData.length > 30) portfolioData.shift();
+
+    const ctx = document.getElementById('portfolioChart').getContext('2d');
+    if (portfolioChartInstance) {
+        portfolioChartInstance.data.datasets[0].data = portfolioData;
+        portfolioChartInstance.update();
+    } else {
+        portfolioChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: portfolioData.map((_,i)=>i), datasets:[{
+                label:'Portfolio €',
+                data: portfolioData,
+                borderColor:'#FACC15',
+                backgroundColor:'rgba(250,204,21,0.2)',
+                fill:true,
+                tension:0.3
+            }]},
+            options: { responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{beginAtZero:true}} }
+        });
+    }
+}
+
+// Render coins
+function renderCoins(coins) {
+    const grid = document.getElementById("coinsGrid");
+
+    coins.forEach(coin => {
+        // Init history array
+        if (!coinHistory[coin.symbol]) coinHistory[coin.symbol] = [];
+
+        coinHistory[coin.symbol].push(coin.currentPrice);
+        if (coinHistory[coin.symbol].length > 30) coinHistory[coin.symbol].shift();
+
+        let card = document.getElementById(`card-${coin.symbol}`);
+        if (!card) {
+            card = document.createElement("div");
+            card.id = `card-${coin.symbol}`;
+            card.className = "bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow hover:shadow-lg transition";
+
+            card.innerHTML = `
+                <h3 class="text-lg font-bold mb-2">${coin.symbol}</h3>
+                <p class="text-gray-400 text-sm mb-1">${coin.pair}</p>
+                <p class="text-green-400 font-semibold text-xl" id="price-${coin.symbol}">€${coin.currentPrice.toFixed(2)}</p>
+                <p class="text-gray-300 text-sm mt-1">Balance: ${coin.balance}</p>
+                <canvas id="spark-${coin.symbol}" class="mt-2" height="50"></canvas>
+            `;
+
+            grid.appendChild(card);
+
+            const ctx = document.getElementById(`spark-${coin.symbol}`).getContext('2d');
+            coinCharts[coin.symbol] = new Chart(ctx, {
+                type:'line',
+                data:{labels:Array(30).fill(''), datasets:[{data:coinHistory[coin.symbol], borderColor:'#FACC15',backgroundColor:'rgba(250,204,21,0.2)',tension:0.3,fill:true}]},
+                options:{responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}}}
             });
+        } else {
+            document.getElementById(`price-${coin.symbol}`).textContent = `€${coin.currentPrice.toFixed(2)}`;
+            const chart = coinCharts[coin.symbol];
+            chart.data.datasets[0].data = coinHistory[coin.symbol];
+            chart.update();
         }
+    });
+}
 
-        function renderCoins(coins) {
-            const grid = document.getElementById("coinsGrid");
-            grid.innerHTML = '';
+// Render trades
+function renderTrades(trades) {
+    const grid = document.getElementById("tradesGrid");
+    grid.innerHTML = '';
 
-            coins.forEach(coin => {
-                const priceChangeClass = coin.currentPrice > 0 ? 'text-green-400' : 'text-gray-400';
+    trades.forEach(trade => {
+        const profit = trade.currentPrice - trade.entryPrice;
+        const profitClass = profit >= 0 ? 'text-green-400' : 'text-red-400';
 
-                const card = document.createElement("div");
-                card.className = "bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow hover:shadow-lg transition";
+        const card = document.createElement("div");
+        card.className = "bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow hover:shadow-lg transition";
+        card.innerHTML = `
+            <h3 class="text-lg font-bold mb-1">${trade.symbol}</h3>
+            <p class="text-gray-400 text-sm mb-1">Entry: €${trade.entryPrice.toFixed(2)}</p>
+            <p class="${profitClass} font-semibold text-xl mb-1">€${trade.currentPrice.toFixed(2)}</p>
+            <p class="text-gray-300 text-sm">Profit/Loss: €${profit.toFixed(2)}</p>
+        `;
+        grid.appendChild(card);
+    });
+}
 
-                card.innerHTML = `
-                    <h3 class="text-lg font-bold mb-2">${coin.symbol}</h3>
-                    <p class="text-gray-400 text-sm mb-1">${coin.pair}</p>
-                    <p class="${priceChangeClass} font-semibold text-xl">€${coin.currentPrice.toFixed(2)}</p>
-                    <p class="text-gray-300 text-sm mt-1">Balance: ${coin.balance}</p>
-                    <canvas id="spark-${coin.symbol}" class="mt-2" height="50"></canvas>
-                `;
-
-                grid.appendChild(card);
-
-                // Sparkline
-                const ctx = document.getElementById(`spark-${coin.symbol}`).getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: Array(10).fill(''),
-                        datasets: [{
-                            data: Array(10).fill(coin.currentPrice),
-                            borderColor: '#FACC15',
-                            backgroundColor: 'rgba(250, 204, 21, 0.2)',
-                            tension: 0.3,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: { legend: { display: false } },
-                        scales: { x: { display: false }, y: { display: false } }
-                    }
-                });
-            });
-        }
-
-        // Poll every 5 seconds
-        fetchCoins();
-        setInterval(fetchCoins, 5000);
-    </script>
+// Poll every 5 seconds
+fetchData();
+setInterval(fetchData, 5000);
+</script>
 </body>
 </html>
