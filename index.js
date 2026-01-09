@@ -7,16 +7,8 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ---------------------
-// In-memory data
-// ---------------------
 let coinsData = [];
 let activeTrades = [];
-let portfolioValue = 0;
-
-// ---------------------
-// Routes
-// ---------------------
 
 app.get("/", (req, res) => res.redirect("/dashboard"));
 
@@ -24,148 +16,174 @@ app.get("/api/coins", (req, res) => res.json(coinsData));
 app.get("/api/trades", (req, res) => res.json(activeTrades));
 
 app.post("/api/coins", (req, res) => {
-    const data = req.body;
-    if (!Array.isArray(data)) return res.sendStatus(400);
-
-    coinsData = data;
+    coinsData = req.body;
 
     activeTrades = coinsData
         .filter(c => c.balance > 0)
         .map(c => {
-            const entryPrice = c.entryPrice || c.currentPrice;
-            const pl = (c.currentPrice - entryPrice) * c.balance;
-            const plPct = entryPrice ? ((c.currentPrice - entryPrice) / entryPrice) * 100 : 0;
+            const entry = c.entryPrice || c.currentPrice;
+            const pl = (c.currentPrice - entry) * c.balance;
+            const pct = entry ? ((c.currentPrice - entry) / entry) * 100 : 0;
 
             return {
                 symbol: c.symbol,
-                entryPrice,
+                entryPrice: entry,
                 currentPrice: c.currentPrice,
-                balance: c.balance,
                 pl,
-                plPct,
+                pct,
                 trailing: c.trailingActive || false
             };
         });
 
-    portfolioValue = coinsData.reduce(
-        (sum, c) => sum + (c.balance * c.currentPrice), 0
-    );
-
-    console.log("✅ Dashboard data updated");
-    res.json({ status: "ok" });
+    res.json({ ok: true });
 });
 
-// ---------------------
-// Dashboard
-// ---------------------
 app.get("/dashboard", (req, res) => {
 res.send(`
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>JPBot Dashboard</title>
+<title>JPBot</title>
 
 <style>
 :root {
-    --bg: #0b0f14;
-    --card: #11161d;
-    --text: #e5e7eb;
-    --muted: #8b949e;
-    --green: #00e676;
-    --red: #ff5252;
-    --orange: #ff9800;
-    --accent: #00c853;
+    --glass: rgba(20, 30, 40, 0.55);
+    --border: rgba(255,255,255,0.08);
+    --green: #00ff9c;
+    --red: #ff4d4d;
+    --orange: #ffb020;
+    --cyan: #4cc9f0;
 }
 
 body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background:
+        radial-gradient(circle at 20% 20%, #0f2027, #000),
+        repeating-linear-gradient(
+            0deg,
+            rgba(0,255,140,0.03) 0px,
+            rgba(0,255,140,0.03) 1px,
+            transparent 1px,
+            transparent 4px
+        );
+    color: #e5e7eb;
 }
 
 header {
-    padding: 16px 20px;
-    font-size: 20px;
+    padding: 20px;
+    font-size: 22px;
     font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .portfolio {
-    margin: 0 20px 20px;
-    background: var(--card);
-    border-radius: 14px;
-    padding: 14px;
+    margin: 0 20px 24px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    background: var(--glass);
+    backdrop-filter: blur(22px);
+    border: 1px solid var(--border);
+    box-shadow: 0 0 40px rgba(0,255,160,0.12);
     display: flex;
     justify-content: space-between;
-    align-items: center;
-}
-
-.portfolio small {
-    color: var(--muted);
 }
 
 .coins {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 14px;
-    padding: 0 20px 30px;
+    grid-template-columns: repeat(auto-fill, minmax(240px,1fr));
+    gap: 18px;
+    padding: 0 20px 40px;
 }
 
 .coin {
-    background: var(--card);
-    border-radius: 14px;
-    padding: 12px;
-    border: 2px solid transparent;
+    position: relative;
+    padding: 16px;
+    border-radius: 22px;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border);
+    transition: transform .25s ease, box-shadow .25s ease;
 }
 
-.coin.green { border-color: var(--green); }
-.coin.red { border-color: var(--red); }
-.coin.orange { border-color: var(--orange); }
+.coin:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 0 30px rgba(0,255,160,0.25);
+}
 
-.coin h3 {
+.coin.green { box-shadow: 0 0 25px rgba(0,255,156,.35); }
+.coin.red { box-shadow: 0 0 25px rgba(255,77,77,.35); }
+.coin.orange { box-shadow: 0 0 25px rgba(255,176,32,.35); }
+
+h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: 18px;
 }
 
-.coin small {
-    color: var(--muted);
+small {
+    color: #8b949e;
 }
 
 .row {
     display: flex;
     justify-content: space-between;
-    margin-top: 6px;
+    margin-top: 8px;
     font-size: 14px;
 }
 
-.price.up { color: var(--green); }
-.price.down { color: var(--red); }
+.price.up {
+    color: var(--green);
+    animation: flashGreen .4s;
+}
+.price.down {
+    color: var(--red);
+    animation: flashRed .4s;
+}
+
+@keyframes flashGreen {
+    from { text-shadow: 0 0 12px var(--green); }
+    to { text-shadow: none; }
+}
+@keyframes flashRed {
+    from { text-shadow: 0 0 12px var(--red); }
+    to { text-shadow: none; }
+}
 
 .ai {
-    margin-top: 6px;
+    margin-top: 10px;
     font-size: 13px;
-    color: #7dd3fc;
+    color: var(--cyan);
 }
 
 .trade {
-    margin-top: 8px;
+    margin-top: 10px;
     font-size: 13px;
-    color: var(--muted);
+    color: #9ca3af;
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 15px rgba(0,255,160,.2); }
+    50% { box-shadow: 0 0 30px rgba(0,255,160,.45); }
+    100% { box-shadow: 0 0 15px rgba(0,255,160,.2); }
 }
 </style>
 </head>
 
 <body>
-<header>📊 JPBot Dashboard</header>
+<header>🧬 JPBot Trading Matrix</header>
 
 <div class="portfolio">
     <div>
-        <small>Portfolio value</small><br/>
+        <small>Total Portfolio</small><br/>
         <strong id="portfolio">€0.00</strong>
     </div>
-    <small>Live</small>
+    <small>LIVE</small>
 </div>
 
 <div class="coins" id="coins"></div>
@@ -173,16 +191,13 @@ header {
 <script>
 let lastPrices = {};
 
-async function loadData() {
-    const coins = await fetch("/api/coins").then(r => r.json());
-    const trades = await fetch("/api/trades").then(r => r.json());
+async function load() {
+    const coins = await fetch("/api/coins").then(r=>r.json());
+    const trades = await fetch("/api/trades").then(r=>r.json());
+    const tradeMap = Object.fromEntries(trades.map(t => [t.symbol, t]));
 
-    const tradeMap = {};
-    trades.forEach(t => tradeMap[t.symbol] = t);
-
-    const container = document.getElementById("coins");
-    container.innerHTML = "";
-
+    const root = document.getElementById("coins");
+    root.innerHTML = "";
     let total = 0;
 
     coins.forEach(c => {
@@ -196,16 +211,14 @@ async function loadData() {
         }
         lastPrices[c.symbol] = c.currentPrice;
 
-        let border = "";
+        let cls = "";
         if (trade) {
-            if (trade.trailing) border = "orange";
-            else if (trade.pl >= 0) border = "green";
-            else border = "red";
+            cls = trade.trailing ? "orange pulse" :
+                  trade.pl >= 0 ? "green pulse" : "red pulse";
         }
 
         const div = document.createElement("div");
-        div.className = "coin " + border;
-
+        div.className = "coin " + cls;
         div.innerHTML = \`
             <h3>\${c.symbol}</h3>
             <small>\${c.pair}</small>
@@ -228,21 +241,19 @@ async function loadData() {
             <div class="ai">🤖 AI score: \${c.aiScore ?? "-"}</div>
 
             \${trade ? \`
-                <div class="trade">
-                    Entry: €\${trade.entryPrice.toFixed(4)}<br/>
-                    P/L: €\${trade.pl.toFixed(2)} (\${trade.plPct.toFixed(2)}%)
-                </div>
-            \` : ""}
+            <div class="trade">
+                Entry: €\${trade.entryPrice.toFixed(4)}<br/>
+                P/L: €\${trade.pl.toFixed(2)} (\${trade.pct.toFixed(2)}%)
+            </div>\` : ""}
         \`;
-
-        container.appendChild(div);
+        root.appendChild(div);
     });
 
     document.getElementById("portfolio").innerText = "€" + total.toFixed(2);
 }
 
-setInterval(loadData, 3000);
-loadData();
+setInterval(load, 2500);
+load();
 </script>
 </body>
 </html>
@@ -250,5 +261,5 @@ loadData();
 });
 
 app.listen(port, () =>
-    console.log("🚀 JPBot Dashboard running on port", port)
+    console.log("🚀 JPBot Matrix Dashboard running")
 );
