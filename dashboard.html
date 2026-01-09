@@ -1,107 +1,156 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JPBot Dashboard</title>
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  body { background: #1a1a1a; color: #f0f0f0; }
-  .positive { color: #4ade80; }
-  .negative { color: #f87171; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPBot Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="p-6">
+<body class="bg-gray-900 text-white font-sans min-h-screen">
 
-<h1 class="text-3xl font-bold mb-6 text-center">🤖 JPBot Dashboard</h1>
+    <header class="bg-gray-800 p-4 text-center">
+        <h1 class="text-3xl font-bold text-yellow-400">JPBot Dashboard</h1>
+        <p class="text-gray-300 mt-1">Realtime crypto portfolio & prices</p>
+    </header>
 
-<div class="overflow-x-auto">
-  <table class="min-w-full table-auto border-collapse border border-gray-700">
-    <thead class="bg-gray-800">
-      <tr>
-        <th class="px-4 py-2 border border-gray-700">Symbol</th>
-        <th class="px-4 py-2 border border-gray-700">Pair</th>
-        <th class="px-4 py-2 border border-gray-700">Balance</th>
-        <th class="px-4 py-2 border border-gray-700">Price (€)</th>
-        <th class="px-4 py-2 border border-gray-700">Value (€)</th>
-      </tr>
-    </thead>
-    <tbody id="coinsTable" class="bg-gray-900"></tbody>
-  </table>
-</div>
+    <main class="p-4 max-w-7xl mx-auto">
 
-<canvas id="portfolioChart" class="mt-8"></canvas>
+        <!-- Portfolio overview -->
+        <section class="mb-8">
+            <div class="bg-gray-800 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-300">Portfolio Value</h2>
+                    <p class="text-4xl font-bold text-green-400" id="portfolioValue">€0.00</p>
+                </div>
+                <div class="w-full md:w-1/2 mt-4 md:mt-0">
+                    <canvas id="portfolioChart" height="80"></canvas>
+                </div>
+            </div>
+        </section>
 
-<script>
-const table = document.getElementById("coinsTable");
-const chartCtx = document.getElementById("portfolioChart").getContext("2d");
-let portfolioChart;
+        <!-- Coins grid -->
+        <section>
+            <h2 class="text-xl font-semibold text-gray-300 mb-4">Coins</h2>
+            <div id="coinsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Coin cards injected here -->
+            </div>
+        </section>
+    </main>
 
-// fetch & update table
-async function fetchCoins() {
-    try {
-        const res = await fetch("/api/coins");
-        const coins = await res.json();
+    <footer class="bg-gray-800 p-4 text-center text-gray-400 mt-8">
+        JPBot Dashboard &copy; 2026
+    </footer>
 
-        table.innerHTML = "";
-        let labels = [];
-        let values = [];
+    <script>
+        const apiUrl = "/api/coins";
 
-        coins.forEach(coin => {
-            const value = coin.balance * coin.currentPrice;
-            labels.push(coin.symbol);
-            values.push(value);
+        const portfolioData = [];
 
-            const row = document.createElement("tr");
-            row.innerHTML = `
-                <td class="px-4 py-2 border border-gray-700">${coin.symbol}</td>
-                <td class="px-4 py-2 border border-gray-700">${coin.pair}</td>
-                <td class="px-4 py-2 border border-gray-700">${coin.balance.toFixed(6)}</td>
-                <td class="px-4 py-2 border border-gray-700">${coin.currentPrice.toFixed(2)}</td>
-                <td class="px-4 py-2 border border-gray-700 ${value>=0?'positive':'negative'}">${value.toFixed(2)}</td>
-            `;
-            table.appendChild(row);
-        });
+        async function fetchCoins() {
+            try {
+                const res = await fetch(apiUrl);
+                const data = await res.json();
 
-        updateChart(labels, values);
-
-    } catch(err) {
-        console.error("⚠️ Fout bij ophalen coins:", err);
-    }
-}
-
-// update Chart.js pie chart
-function updateChart(labels, values) {
-    if(portfolioChart) {
-        portfolioChart.data.labels = labels;
-        portfolioChart.data.datasets[0].data = values;
-        portfolioChart.update();
-    } else {
-        portfolioChart = new Chart(chartCtx, {
-            type: 'pie',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Portfolio Value (€)',
-                    data: values,
-                    backgroundColor: labels.map(() => `hsl(${Math.random()*360}, 70%, 50%)`),
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: '#f0f0f0' } },
-                    tooltip: { mode: 'index', intersect: false }
-                }
+                updatePortfolio(data);
+                renderCoins(data);
+            } catch (error) {
+                console.error("Error fetching coins:", error);
             }
-        });
-    }
-}
+        }
 
-// auto-refresh elke 5 sec
-setInterval(fetchCoins, 5000);
-fetchCoins();
-</script>
+        function updatePortfolio(coins) {
+            const eurBalance = coins.reduce((sum, c) => sum + (c.balance * c.currentPrice), 0);
+            document.getElementById("portfolioValue").textContent = `€${eurBalance.toFixed(2)}`;
 
+            // Keep last 30 values for chart
+            portfolioData.push(eurBalance);
+            if (portfolioData.length > 30) portfolioData.shift();
+
+            renderPortfolioChart();
+        }
+
+        function renderPortfolioChart() {
+            const ctx = document.getElementById('portfolioChart').getContext('2d');
+            if (window.portfolioChartInstance) {
+                window.portfolioChartInstance.data.labels = portfolioData.map((_, i) => i);
+                window.portfolioChartInstance.data.datasets[0].data = portfolioData;
+                window.portfolioChartInstance.update();
+                return;
+            }
+
+            window.portfolioChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: portfolioData.map((_, i) => i),
+                    datasets: [{
+                        label: 'Portfolio €',
+                        data: portfolioData,
+                        borderColor: '#FACC15',
+                        backgroundColor: 'rgba(250, 204, 21, 0.2)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderCoins(coins) {
+            const grid = document.getElementById("coinsGrid");
+            grid.innerHTML = '';
+
+            coins.forEach(coin => {
+                const priceChangeClass = coin.currentPrice > 0 ? 'text-green-400' : 'text-gray-400';
+
+                const card = document.createElement("div");
+                card.className = "bg-gray-800 rounded-xl p-4 flex flex-col items-center shadow hover:shadow-lg transition";
+
+                card.innerHTML = `
+                    <h3 class="text-lg font-bold mb-2">${coin.symbol}</h3>
+                    <p class="text-gray-400 text-sm mb-1">${coin.pair}</p>
+                    <p class="${priceChangeClass} font-semibold text-xl">€${coin.currentPrice.toFixed(2)}</p>
+                    <p class="text-gray-300 text-sm mt-1">Balance: ${coin.balance}</p>
+                    <canvas id="spark-${coin.symbol}" class="mt-2" height="50"></canvas>
+                `;
+
+                grid.appendChild(card);
+
+                // Sparkline
+                const ctx = document.getElementById(`spark-${coin.symbol}`).getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: Array(10).fill(''),
+                        datasets: [{
+                            data: Array(10).fill(coin.currentPrice),
+                            borderColor: '#FACC15',
+                            backgroundColor: 'rgba(250, 204, 21, 0.2)',
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { display: false }, y: { display: false } }
+                    }
+                });
+            });
+        }
+
+        // Poll every 5 seconds
+        fetchCoins();
+        setInterval(fetchCoins, 5000);
+    </script>
 </body>
 </html>
