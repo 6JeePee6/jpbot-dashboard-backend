@@ -8,10 +8,10 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Serve static files (HTML, CSS, JS) vanuit root
+// Serve static files vanuit root
 app.use(express.static(path.resolve('./')));
 
-// In-memory opslag van coin-data
+// In-memory coin data
 let coinsData = [];
 
 // Healthcheck
@@ -19,7 +19,7 @@ app.get("/", (req, res) => {
     res.send("JPBot Dashboard API is running");
 });
 
-// Frontend haalt coins op
+// API voor coins
 app.get("/api/coins", (req, res) => {
     res.json(coinsData);
 });
