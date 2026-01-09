@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JPBot Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; text-align: center; border-bottom: 1px solid #ccc; }
+    th { background-color: #333; color: white; }
+    tr:nth-child(even) { background-color: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <h1>JPBot Dashboard</h1>
+  <table id="coinsTable">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Pair</th>
+        <th>Balance</th>
+        <th>Current Price (€)</th>
+        <th>Value (€)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function fetchCoins() {
+      try {
+        const response = await fetch('https://jpbot-dashboard.onrender.com/api/coins');
+        const coins = await response.json();
+        const tbody = document.querySelector('#coinsTable tbody');
+        tbody.innerHTML = ''; // Clear table
+
+        coins.forEach(coin => {
+          const value = (coin.balance * coin.currentPrice).toFixed(2);
+          const row = `<tr>
+            <td>${coin.symbol}</td>
+            <td>${coin.pair}</td>
+            <td>${coin.balance}</td>
+            <td>${coin.currentPrice}</td>
+            <td>${value}</td>
+          </tr>`;
+          tbody.innerHTML += row;
+        });
+      } catch (err) {
+        console.error('Fout bij ophalen coins:', err);
+      }
+    }
+
+    // Fetch data elke 5 seconden
+    fetchCoins();
+    setInterval(fetchCoins, 5000);
+  </script>
+</body>
+</html>
