@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -7,6 +8,10 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Serve static files (HTML, CSS, JS) vanuit root
+app.use(express.static(path.resolve('./')));
+
+// In-memory opslag van coin-data
 let coinsData = [];
 
 // Healthcheck
@@ -25,7 +30,6 @@ app.post("/api/coins", (req, res) => {
     if (!Array.isArray(newData)) {
         return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
     }
-
     coinsData = newData;
     console.log("✅ Data ontvangen van JPBot:", coinsData);
     res.json({ status: "ok", message: "Data ontvangen!" });
