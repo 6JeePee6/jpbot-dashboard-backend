@@ -1,0 +1,10 @@
+{
+  "name": "jpbot-dashboard-backend",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
