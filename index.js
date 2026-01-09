@@ -7,26 +7,22 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ---------------------
-// In-memory data
-// ---------------------
+// ==========================
+// DATA
+// ==========================
 let coinsData = [];
-let activeTrades = [];
+let priceHistory = {};
+let candleHistory = {};
 
-// ---------------------
+// ==========================
 // API
-// ---------------------
-
+// ==========================
 app.get("/", (req, res) => {
     res.send("JPBot Dashboard API is running");
 });
 
 app.get("/api/coins", (req, res) => {
     res.json(coinsData);
-});
-
-app.get("/api/trades", (req, res) => {
-    res.json(activeTrades);
 });
 
 app.post("/api/coins", (req, res) => {
@@ -36,156 +32,195 @@ app.post("/api/coins", (req, res) => {
 
     coinsData = req.body;
 
-    activeTrades = coinsData
-        .filter(c => c.balance > 0)
-        .map(c => ({
-            symbol: c.symbol,
-            pair: c.pair,
-            balance: c.balance,
-            entryPrice: c.currentPrice,
-            currentPrice: c.currentPrice
-        }));
+    coinsData.forEach(c => {
+        // ---- PRICE HISTORY
+        if (!priceHistory[c.symbol]) priceHistory[c.symbol] = [];
+        priceHistory[c.symbol].push(c.currentPrice);
+        if (priceHistory[c.symbol].length > 60) priceHistory[c.symbol].shift();
 
-    console.log("✅ Data ontvangen:", coinsData.length, "coins");
+        // ---- CANDLES
+        if (!candleHistory[c.symbol]) candleHistory[c.symbol] = [];
+
+        const candles = candleHistory[c.symbol];
+        const last = candles[candles.length - 1];
+
+        if (!last || Date.now() - last.timestamp > 60_000) {
+            candles.push({
+                open: c.currentPrice,
+                high: c.currentPrice,
+                low: c.currentPrice,
+                close: c.currentPrice,
+                timestamp: Date.now()
+            });
+        } else {
+            last.high = Math.max(last.high, c.currentPrice);
+            last.low = Math.min(last.low, c.currentPrice);
+            last.close = c.currentPrice;
+        }
+
+        if (candles.length > 30) candles.shift();
+    });
+
     res.json({ status: "ok" });
 });
 
-// ---------------------
-// DASHBOARD (INLINE)
-// ---------------------
+// ==========================
+// DASHBOARD UI
+// ==========================
 app.get("/dashboard.html", (req, res) => {
 res.send(`<!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>JPBot Dashboard</title>
 
 <style>
-* { box-sizing: border-box; }
 body {
     margin: 0;
+    background: #0b0b0d;
+    color: #f5f5f7;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #0f1220;
-    color: #fff;
 }
 
 header {
-    padding: 16px;
-    background: linear-gradient(135deg, #1e90ff, #6a5acd);
+    padding: 20px;
     font-size: 22px;
-    font-weight: 600;
+    font-weight: 700;
+    background: linear-gradient(135deg, #0aff9d, #009e6f);
+    color: #002016;
 }
 
 .section {
-    padding: 16px;
+    padding: 18px;
 }
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 14px;
 }
 
 .card {
-    background: #1b1f3b;
-    border-radius: 14px;
+    background: #151517;
+    border-radius: 18px;
     padding: 14px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    transition: transform 0.2s;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
 }
-.card:hover { transform: scale(1.03); }
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
 .symbol {
     font-size: 18px;
-    font-weight: bold;
+    font-weight: 700;
 }
 
-.pair {
-    font-size: 12px;
-    opacity: 0.6;
-}
+.price.up { color: #00ff9c; }
+.price.down { color: #ff4d4d; }
 
-.price {
+.candles {
+    height: 80px;
     margin-top: 8px;
-    font-size: 16px;
-}
-
-.balance {
-    margin-top: 4px;
-    font-size: 13px;
-    opacity: 0.8;
 }
 
 .trade {
-    display: flex;
-    justify-content: space-between;
-    background: #222654;
-    padding: 12px;
-    border-radius: 12px;
-    margin-bottom: 10px;
+    background: #16181d;
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 12px;
 }
+
+.pnl.up { color: #00ff9c; }
+.pnl.down { color: #ff4d4d; }
+
+small { opacity: .6 }
 </style>
 </head>
 
 <body>
-<header>🚀 JPBot Dashboard</header>
+<header>JPBot • Live Trading</header>
 
 <div class="section">
-    <h2>📊 Coins</h2>
-    <div id="coins" class="grid"></div>
+<h2>📊 Coins</h2>
+<div id="coins" class="grid"></div>
 </div>
 
 <div class="section">
-    <h2>🔥 Actieve Trades</h2>
-    <div id="trades"></div>
+<h2>💰 Actieve Trades</h2>
+<div id="trades"></div>
 </div>
 
 <script>
-let scrollY = 0;
+let lastPrices = {};
 
-async function loadData() {
-    scrollY = window.scrollY;
+function drawCandles(candles) {
+    if (!candles || candles.length === 0) return "";
+    const prices = candles.flatMap(c => [c.high, c.low]);
+    const max = Math.max(...prices);
+    const min = Math.min(...prices);
 
-    const coins = await fetch('/api/coins').then(r => r.json());
-    const trades = await fetch('/api/trades').then(r => r.json());
+    return candles.map((c, i) => {
+        const scale = p => 80 - ((p - min) / (max - min || 1)) * 70;
+        const color = c.close >= c.open ? "#00ff9c" : "#ff4d4d";
 
-    const coinsDiv = document.getElementById('coins');
-    coinsDiv.innerHTML = coins.map(c => \`
-        <div class="card">
-            <div class="symbol">\${c.symbol}</div>
-            <div class="pair">\${c.pair}</div>
-            <div class="price">€ \${Number(c.currentPrice).toFixed(4)}</div>
-            <div class="balance">Bal: \${c.balance}</div>
-        </div>
-    \`).join("");
-
-    const tradesDiv = document.getElementById('trades');
-    tradesDiv.innerHTML = trades.length === 0
-        ? "<div style='opacity:.6'>Geen actieve trades</div>"
-        : trades.map(t => \`
-            <div class="trade">
-                <div>
-                    <strong>\${t.symbol}</strong><br>
-                    <small>\${t.pair}</small>
-                </div>
-                <div>
-                    € \${Number(t.currentPrice).toFixed(4)}
-                </div>
-            </div>
-        \`).join("");
-
-    window.scrollTo(0, scrollY);
+        return \`
+        <line x1="\${i*8+4}" x2="\${i*8+4}" y1="\${scale(c.high)}" y2="\${scale(c.low)}" stroke="\${color}" />
+        <rect x="\${i*8+2}" y="\${scale(Math.max(c.open,c.close))}" width="4" height="\${Math.max(2, Math.abs(scale(c.open)-scale(c.close)))}" fill="\${color}" />
+        \`;
+    }).join("");
 }
 
-loadData();
-setInterval(loadData, 5000);
-</script>
+async function load() {
+    const coins = await fetch('/api/coins').then(r => r.json());
 
+    document.getElementById("coins").innerHTML = coins.map(c => {
+        const prev = lastPrices[c.symbol] ?? c.currentPrice;
+        const dir = c.currentPrice >= prev ? "up" : "down";
+        lastPrices[c.symbol] = c.currentPrice;
+
+        return \`
+        <div class="card">
+            <div class="row">
+                <div class="symbol">\${c.symbol}</div>
+                <div class="price \${dir}">€ \${c.currentPrice.toFixed(4)}</div>
+            </div>
+            <svg class="candles" viewBox="0 0 260 80">
+                \${drawCandles(c.candles || [])}
+            </svg>
+            <small>Balance: \${c.balance}</small>
+        </div>\`;
+    }).join("");
+
+    const trades = coins.filter(c => c.balance > 0);
+    document.getElementById("trades").innerHTML =
+        trades.length === 0 ? "<small>Geen actieve trades</small>" :
+        trades.map(t => {
+            const pnl = (t.currentPrice - t.entryPrice) * t.balance;
+            const pnlPct = ((t.currentPrice / t.entryPrice - 1) * 100);
+            const cls = pnl >= 0 ? "up" : "down";
+
+            return \`
+            <div class="trade">
+                <div class="row">
+                    <strong>\${t.symbol}</strong>
+                    <span class="pnl \${cls}">
+                        € \${pnl.toFixed(2)} (\${pnlPct.toFixed(2)}%)
+                    </span>
+                </div>
+            </div>\`;
+        }).join("");
+}
+
+load();
+setInterval(load, 4000);
+</script>
 </body>
 </html>`);
 });
 
-// ---------------------
 app.listen(port, () => {
     console.log("JPBot Dashboard running on port", port);
 });
