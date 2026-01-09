@@ -7,117 +7,106 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// In-memory opslag van coin-data en trades
+// In-memory data
 let coinsData = [];
 let tradesData = [];
 
-// Healthcheck
-app.get("/", (req, res) => {
-  res.send("JPBot Dashboard API is running");
-});
+// API endpoints
+app.get("/api/coins", (req, res) => res.json(coinsData));
+app.get("/api/trades", (req, res) => res.json(tradesData));
 
-// Frontend haalt coins op
-app.get("/api/coins", (req, res) => {
-  res.json(coinsData);
-});
-
-// Frontend haalt trades op
-app.get("/api/trades", (req, res) => {
-  res.json(tradesData);
-});
-
-// JPBot stuurt nieuwe coin data
 app.post("/api/coins", (req, res) => {
-  const newData = req.body;
-  if (!Array.isArray(newData)) {
-    return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
-  }
-  coinsData = newData;
-  console.log("✅ Coins data ontvangen:", coinsData);
-  res.json({ status: "ok", message: "Data ontvangen!" });
+    const newData = req.body;
+    if (!Array.isArray(newData)) return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
+    coinsData = newData;
+    console.log("✅ Coins data ontvangen:", coinsData);
+    res.json({ status: "ok" });
 });
 
-// JPBot stuurt nieuwe trades data
 app.post("/api/trades", (req, res) => {
-  const newTrades = req.body;
-  if (!Array.isArray(newTrades)) {
-    return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
-  }
-  tradesData = newTrades;
-  console.log("✅ Trades data ontvangen:", tradesData);
-  res.json({ status: "ok", message: "Trades ontvangen!" });
+    const newTrades = req.body;
+    if (!Array.isArray(newTrades)) return res.status(400).json({ status: "error", message: "Data moet een array zijn" });
+    tradesData = newTrades;
+    console.log("✅ Trades data ontvangen:", tradesData);
+    res.json({ status: "ok" });
 });
 
-// Dashboard pagina
+// Inline dashboard
 app.get("/dashboard.html", (req, res) => {
-  res.send(`<!DOCTYPE html>
+    res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>JPBot Dashboard</title>
 <style>
-  body { font-family: 'Arial', sans-serif; margin:0; padding:0; background:#121212; color:#eee; }
-  header { padding:20px; text-align:center; font-size:28px; background:#1f1f1f; color:#f5a623; }
-  .section { padding:20px; }
-  h2 { margin-bottom:10px; color:#f5a623; }
-  .grid { display:flex; flex-wrap:wrap; gap:15px; }
-  .card { background:#1f1f1f; border-radius:10px; padding:15px; min-width:150px; flex:1 1 150px; box-shadow:0 0 10px #000; transition:transform 0.2s; }
-  .card:hover { transform:scale(1.05); }
-  .symbol { font-weight:bold; font-size:18px; margin-bottom:5px; }
-  .value { font-size:14px; }
-  .price { color:#4caf50; }
-  .loss { color:#f44336; }
-  .trades-card { background:#272727; border:1px solid #444; }
-  .scrollable { max-height:400px; overflow-y:auto; padding-right:10px; }
+  body { font-family: Arial, sans-serif; margin:0; background:#121212; color:#fff; }
+  h1 { text-align:center; margin:20px 0; color:#00ffcc; }
+  .container { display:flex; flex-wrap:wrap; justify-content:center; gap:20px; padding:10px; }
+  .card { background:#1e1e1e; padding:15px; border-radius:12px; width:220px; box-shadow:0 0 15px rgba(0,255,200,0.2); }
+  .coin { font-weight:bold; font-size:1.2em; margin-bottom:5px; }
+  .price { color:#00ffcc; font-weight:bold; }
+  .balance { color:#fff; margin-top:5px; }
+  .trade-card { background:#333; padding:12px; border-radius:10px; width:260px; box-shadow:0 0 10px rgba(0,255,200,0.3); margin:10px; }
+  .trade-header { font-weight:bold; margin-bottom:5px; color:#ffcc00; }
+  .scroll-container { max-height:500px; overflow-y:auto; padding:10px; }
 </style>
 </head>
 <body>
-<header>🤖 JPBot Dashboard</header>
+<h1>JPBot Dashboard</h1>
+<div class="container" id="coinsContainer"></div>
 
-<div class="section">
-  <h2>📈 Coins</h2>
-  <div class="grid" id="coins"></div>
-</div>
+<h2 style="text-align:center; margin-top:30px; color:#ffcc00;">Actieve Trades</h2>
+<div class="scroll-container" id="tradesContainer"></div>
 
-<div class="section">
-  <h2>💹 Actieve Trades</h2>
-  <div class="grid scrollable" id="trades"></div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 async function fetchData() {
-  const coins = await fetch('/api/coins').then(r=>r.json());
-  const trades = await fetch('/api/trades').then(r=>r.json());
+    try {
+        const coinsRes = await fetch("/api/coins");
+        const tradesRes = await fetch("/api/trades");
+        const coins = await coinsRes.json();
+        const trades = await tradesRes.json();
 
-  const coinsDiv = document.getElementById('coins');
-  coinsDiv.innerHTML = coins.map(c => \`
-    <div class="card">
-      <div class="symbol">\${c.symbol}</div>
-      <div class="value">Pair: \${c.pair}</div>
-      <div class="value">Balance: \${c.balance}</div>
-      <div class="value">Price: <span class="\${c.currentPrice > 0 ? 'price' : 'loss'}">€\${c.currentPrice.toFixed(2)}</span></div>
-    </div>\`).join('');
+        const coinsContainer = document.getElementById("coinsContainer");
+        coinsContainer.innerHTML = "";
+        coins.forEach(c => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = \`
+                <div class="coin">\${c.symbol}</div>
+                <div class="price">€\${c.currentPrice.toLocaleString()}</div>
+                <div class="balance">Balance: \${c.balance}</div>
+                <div>Pair: \${c.pair}</div>
+            \`;
+            coinsContainer.appendChild(card);
+        });
 
-  const tradesDiv = document.getElementById('trades');
-  tradesDiv.innerHTML = trades.map(t => \`
-    <div class="card trades-card">
-      <div class="symbol">\${t.symbol}</div>
-      <div class="value">Entry: €\${t.entryPrice.toFixed(2)}</div>
-      <div class="value">Current: €\${t.currentPrice.toFixed(2)}</div>
-      <div class="value">Amount: \${t.amount}</div>
-      <div class="value">Profit: <span class="\${t.profitPercent >= 0 ? 'price' : 'loss'}">\${t.profitPercent.toFixed(2)}%</span></div>
-    </div>\`).join('');
+        const tradesContainer = document.getElementById("tradesContainer");
+        tradesContainer.innerHTML = "";
+        trades.forEach(t => {
+            const tcard = document.createElement("div");
+            tcard.className = "trade-card";
+            tcard.innerHTML = \`
+                <div class="trade-header">\${t.coin.symbol} Trade</div>
+                <div>Entry: €\${t.entryPrice.toFixed(2)}</div>
+                <div>Amount: \${t.amount}</div>
+                <div>Current: €\${t.coin.currentPrice.toFixed(2)}</div>
+                <div>Stop Loss: €\${t.stopLoss.toFixed(2)}</div>
+            \`;
+            tradesContainer.appendChild(tcard);
+        });
+    } catch(err) {
+        console.error("Error fetching data:", err);
+    }
 }
 
-// Refresh elke 2 seconden
-setInterval(fetchData, 2000);
+// Update elke 5 seconden
 fetchData();
+setInterval(fetchData, 5000);
 </script>
 </body>
 </html>`);
 });
 
 app.listen(port, () => {
-  console.log(`JPBot Dashboard API running on port ${port}`);
+    console.log(`JPBot Dashboard API running on port ${port}`);
 });
