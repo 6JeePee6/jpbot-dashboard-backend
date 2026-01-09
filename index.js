@@ -29,7 +29,7 @@ app.post("/api/coins", (req, res) => {
 
     // Update de in-memory data
     coinsData = newData;
-    console.log("✅ Data ontvangen van app:", coinsData);
+    console.log("✅ Data ontvangen van JPBot:", coinsData);
     res.json({ status: "ok", message: "Data ontvangen!" });
 });
 
